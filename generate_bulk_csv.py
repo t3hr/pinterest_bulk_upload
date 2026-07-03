@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 from urllib.parse import quote
 
@@ -40,6 +41,20 @@ def _raw_url(image_path: Path) -> str:
     return f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{REPO_BRANCH}/{quote(rel_path)}"
 
 
+def _slugify(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def _unique_link(link: str, title: str) -> str:
+    """Pinterests Bulk-Upload lehnt Zeilen mit identischem Link-Wert als
+    Duplikat ab. Haengt einen pro Pin eindeutigen Tracking-Parameter an,
+    damit derselbe Ziel-Link mehrfach verwendet werden kann."""
+    if not link:
+        return link
+    separator = "&" if "?" in link else "?"
+    return f"{link}{separator}utm_content={_slugify(title)}"
+
+
 def main() -> None:
     if not CONTENT_FILE.exists():
         raise SystemExit(f"{CONTENT_FILE} nicht gefunden. Siehe content.example.json.")
@@ -61,7 +76,7 @@ def main() -> None:
         description = str(entry["description"]).strip()[:480]
         hashtags = [tag.strip() for tag in entry.get("hashtags", []) if tag.strip()]
         board = str(entry.get("board", DEFAULT_BOARD)).strip()
-        link = str(entry.get("link", DEFAULT_LINK)).strip()
+        link = _unique_link(str(entry.get("link", DEFAULT_LINK)).strip(), title)
 
         full_description = description
         if hashtags:

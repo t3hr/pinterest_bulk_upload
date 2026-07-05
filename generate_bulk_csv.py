@@ -32,6 +32,11 @@ OUTPUT_CSV = Path(__file__).parent / "pinterest_bulk_upload.csv"
 DEFAULT_BOARD = "synthetic stills"
 DEFAULT_LINK = "https://www.instagram.com/tele__prompt_er/"
 
+# Pinterest macht ab ~50 Pins pro Import Probleme (Overflow -- unklar ob in
+# der CSV-Verarbeitung oder in der Upload-Sitzung). Deshalb hoechstens 49
+# Zeilen pro Datei; bei mehr wird auf nummerierte CSVs aufgeteilt.
+MAX_ROWS_PER_CSV = 49
+
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 CSV_FIELDS = ["Title", "Media URL", "Pinterest board", "Description", "Link", "Keywords"]
 
@@ -100,12 +105,36 @@ def main() -> None:
         for name in missing:
             print(f"  - {name}")
 
-    with OUTPUT_CSV.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
+    if len(rows) <= MAX_ROWS_PER_CSV:
+        output_files = [(OUTPUT_CSV, rows)]
+        # Veraltete Teil-CSVs eines frueheren Split-Laufs entfernen.
+        for stale in OUTPUT_CSV.parent.glob(f"{OUTPUT_CSV.stem}_*{OUTPUT_CSV.suffix}"):
+            stale.unlink()
+    else:
+        output_files = [
+            (OUTPUT_CSV.with_name(f"{OUTPUT_CSV.stem}_{part}{OUTPUT_CSV.suffix}"), chunk)
+            for part, chunk in enumerate(
+                (rows[i : i + MAX_ROWS_PER_CSV] for i in range(0, len(rows), MAX_ROWS_PER_CSV)),
+                start=1,
+            )
+        ]
+        # Veraltete Einzeldatei entfernen, damit nicht versehentlich eine
+        # alte Komplett-CSV neben den Teil-CSVs liegen bleibt.
+        OUTPUT_CSV.unlink(missing_ok=True)
 
-    print(f"{len(rows)} Zeile(n) geschrieben nach {OUTPUT_CSV}")
+    for output_path, chunk in output_files:
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            writer.writeheader()
+            writer.writerows(chunk)
+        print(f"{len(chunk)} Zeile(n) geschrieben nach {output_path}")
+
+    if len(output_files) > 1:
+        print(
+            f"Insgesamt {len(rows)} Pins auf {len(output_files)} CSVs aufgeteilt "
+            f"(max. {MAX_ROWS_PER_CSV} pro Datei) -- alle Dateien einzeln bei "
+            "Pinterest hochladen."
+        )
 
 
 if __name__ == "__main__":

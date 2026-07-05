@@ -27,3 +27,7 @@ Hinweise:
 - `content.json` ist in `.gitignore` — nicht committen, nur lokal nutzen.
 - Die CSV nutzt automatisch eindeutige `utm_content`-Parameter pro Pin
   (Pinterest lehnt identische Links als Duplikat ab).
+- **WICHTIG: Maximal 49 Pins pro CSV** — bei 50 oder mehr Zeilen gibt es beim
+  Pinterest-Import Probleme (Overflow). Wenn mehr Bilder anstehen, die Ausgabe
+  auf mehrere CSVs aufteilen (z.B. `pinterest_bulk_upload_1.csv`,
+  `pinterest_bulk_upload_2.csv`) und alle Dateien dem Nutzer schicken.
